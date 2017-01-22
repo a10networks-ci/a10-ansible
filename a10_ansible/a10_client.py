@@ -29,11 +29,6 @@ options:
     choices:
        - 2.1
        - 3.0
-  port:
-    description:
-      - The TCP port of the admin interface for the A10 ADC
-    required: true
-    default: 443
   username:
     description:
       - The username to authenticate to the admin interface for the A10 ADC
@@ -42,6 +37,11 @@ options:
     description:
       - The password to authenticate to the admin interface for the A10 ADC
     required: true
+  port:
+    description:
+      - The TCP port of the admin interface for the A10 ADC
+    required: true
+    default: 443
 
 notes:
   - Requires the acos-client Python package on the host. This should be installed
@@ -60,9 +60,9 @@ EXAMPLES = '''
   a10_base:
       host: 10.10.10.10
       version: 2.1
-      port: 443
       username="admin"
       password: "a10"
+      port: 443
 '''
 
 RETURN = '''
@@ -82,7 +82,7 @@ AXAPI_VERSIONS = [2.1, 3.0]
 
 class A10ClientBase(object):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, client=None, *args, **kwargs):
         # The params that change in the module
         # TODO(ht) - Params that change?
         self.cparams = dict()
@@ -90,17 +90,15 @@ class A10ClientBase(object):
         # Stores the params that are sent to the module
         self.params = kwargs
         # TODO(ht) - Does this have to be "api" ?
-        self.api = Client(kwargs['host'],
-                          kwargs['version'],
-                          kwargs['port'].
-                          kwargs['username'],
-                          kwargs['password'])
+        self._api = client or Client(kwargs['host'],
+                                     kwargs['version'],
+                                     kwargs['username'],
+                                     kwargs['password'],
+                                     kwargs['port'])
 
-    def connect(self):
-        self.api.connect()
-
-    def disconnect(self):
-        self.api.disconnect()
+        @property
+        def system(self):
+            return self._api.system()
 
 
 def main():

@@ -1,11 +1,12 @@
 # Ansible requirementss
+acos-client
 paramiko
 PyYAML
 jinja2
 httplib2
 passlib
 six
-
+ansible
 # These are needed for various optional features
 #python-memcached
 #redis

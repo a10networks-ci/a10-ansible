@@ -10,8 +10,3 @@ six
 #python-memcached
 #redis
 
-# Test requirements
-unittest2
-mock
-nose
-pytest

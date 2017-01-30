@@ -1,6 +1,6 @@
 # Pre-refactored modules
 *old.py
-
+*.retry
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

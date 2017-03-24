@@ -8,6 +8,36 @@ ANSIBLE_METADATA = {'status': ['preview'],
 
 DOCUMENTATION = ''' '''
 
+VALID_SERVICE_GROUP_FIELDS = ['name', 'protocol', 'lb_method']
+VALID_SERVER_FIELDS = ['server', 'port', 'status']
+
+
+def get_member_server(acos_client, sg_name, server_name, port):
+    try:
+        return acos_client.slb.service_group.member.get(sg_name,
+                server_name,
+                port)
+    except acos_errors.NotFound:
+        pass
+
+def check_update_member(acos_client, server, slb_server):
+    for k,v in server.items():
+        if not slb_server[""][k] == v:
+            return True
+    return False
+
+def get_service_group(acos_client, sg_name):
+    try:
+        return acos_client.slb.service_group.get(sg_name)
+    except acos_errors.NotFound:
+        pass
+
+def check_update_sg(acos_client, service_group, slb_sg):
+    for k,v in service_group.items():
+        if not slb_sg["service_group"][k] == v:
+            return True
+    return False
+
 def main():
     argument_spec = a10_argument_spec()
     argument_spec.update(url_argument_spec())
@@ -45,22 +75,19 @@ def main():
     partition = module.params['partition']
     state = module.params['state']
     write_config = module.params['write_config']
-    sg_name = module.params['name']
-    protocol = module.params['service_group_protocol']
-    method = module.params['service_group_method']
+    service_group = module.params['service_group']
     servers = module.params['servers']
 
-    LOG.debug("MODULE PARAMS NOT BROKEN")
+    sg_name = service_group["name"]
+    lb_method = service_group["method"]
+    protocol = service_group["protocol"]
 
     if sg_name is None:
         module.fail_json(msg='service_group is required')
 
     acos_client = acos.Client(host, "3.0", username, password)
 
-    LOG.debug("ACOS CLIENT NOT BROKEN")
-
     changed = False
-    result = None
     try:
         if state == 'absent':
             member_list = acos_client.slb.service_group.member.get_list(sg_name);
@@ -69,20 +96,42 @@ def main():
                 result = acos_client.slb.service_group.member.delete(sg_name,
                                                                      member['name'],
                                                                      member['port'])
-            result = acos_client.slb.service_group.delete(sg_name)
-        
-            if result["response"]["status"] == "fail":
-                module.fail_json(msg="service group does not exist")
-            else:
+            try:
+                result = acos_client.slb.service_group.delete(sg_name)
                 changed = True
+            except acos_errors.NotFound:
+                module.fail_json(msg="service group does not exist")
 
         elif state == 'present':
-            try:
-                result = acos_client.slb.service_group.create(sg_name, protocol, method)
+            slb_sg = get_service_group(sg_name)
+
+            if slb_sg:
+                update = check_update_sg(acos_client, service_group, slb_sg)
+
+                if update:
+                    result = acos_client.slb.service_group.update(sg_name, protocol,
+                                                                  lb_method, health_monitor=None)
+                    changed = True
+                    LOG.debug("Updated service group") 
+            else:
+                result = acos_client.slb.service_group.create(sg_name, protocol, lb_method)
                 changed = True
-            except acos_errors.Exists:
-                result = acos_client.slb.service_group.update(sg_name, protocol,
-                                                              method, health_monitor=None)
+                LOG.debug("Created service group")
+
+            for server in servers:
+                slb_server = get_member_server(sg_name, server["name"], server["port"])
+
+                if slb_server:
+                    update = check_update_server(acos_client, server, slb_server)
+
+                    if update:
+                        result = acos_client.slb.member.update(sg_name, server["name"],
+                                                               server["port"])
+                        changed = True
+                        LOG.debug("Updated member server")
+                else:
+                    acos_client.slb.server.create(server["name"], server["ip_address"])
+                    result = acos_client.slb.member.associate()
 
     except Exception as e:
         module.fail_json(msg=("Caught exception: {0}").format(e))
@@ -90,15 +139,13 @@ def main():
     module.exit_json(changed=changed, content=result)
 
 
-import json
 import logging as LOG
-LOG.basicConfig(filename="test1.log", level=LOG.DEBUG)
-LOG.debug("SANITY")
+LOG.basicConfig(filename=".debug", level=LOG.DEBUG)
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.urls import url_argument_spec
-from ansible.module_utils.a10 import a10_argument_spec
+from ansible.module_utils.urls import url_argument_spec 
 
+import a10_base
 import acos_client as acos
 from acos_client import errors as acos_errors
 

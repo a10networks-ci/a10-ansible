@@ -1,0 +1,19 @@
+# - include: a10_virtual_server
+- hosts: localhost
+  tasks:
+    - a10_service_group:
+        host: "10.48.6.222"
+        username: admin
+        password: a10
+        partition: shared
+        state: "present"
+        service_group:
+          - name: sg-80-tcp
+            protocol: "tcp"
+            method: "round-robin"
+        servers:
+          - name: foo1.mydomain.com
+            ip_address: "1.1.1.1"
+            port: 8080
+            protocol: http
+            status: disabled

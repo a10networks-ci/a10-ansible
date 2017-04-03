@@ -7,13 +7,10 @@
         password: a10
         partition: shared
         state: "present"
-        service_group:
-          - name: sg-80-tcp
-            protocol: "tcp"
-            method: "round-robin"
-        servers:
+        name: sg-80-tcp
+        protocol: "tcp"
+        lb_method: "round-robin"
+        members:
           - name: foo1.mydomain.com
-            ip_address: "1.1.1.1"
             port: 8080
-            protocol: http
-            status: disabled
+            state: enable

@@ -7,9 +7,9 @@
         password: a10
         partition: shared
         state: "present"
-        name: sg-80-tcp
+        name: sg-81-tcp
         protocol: "tcp"
-        lb_method: "round-robin"
+        lb_method: "least-connection"
         members:
           - name: foo1.mydomain.com
             port: 8080

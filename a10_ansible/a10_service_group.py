@@ -27,6 +27,12 @@ def get_member_server(acos_client, sg_name, member_name, port):
     except acos_errors.NotFound:
         pass
 
+def get_member_list(acos_client, sg_name):
+    try:
+        return acos_client.slb.service_group.member.get_list(sg_name)
+    except acos_errors.NotFound:
+        pass
+
 def check_update_member(acos_client, member, slb_member):
     member["member-state"] = member.pop("state")
     if member["member-state"] == 1:
@@ -35,17 +41,13 @@ def check_update_member(acos_client, member, slb_member):
         member["member-state"] = "enable"
     for k,v in member.items():
         if not slb_member["member"].get(k) == v:
-            LOG.debug("*******POS*******")
-            LOG.debug(v)
             return True
     return False
 
 def get_service_group(acos_client, sg_name):
-    return acos_client.slb.service_group.get(sg_name)
     try:
-        LOG.debug("*********NAME******")
-        LOG.debug(sg_name)
         LOG.debug(acos_client.slb.service_group.get(sg_name))
+        return acos_client.slb.service_group.get(sg_name)
     except acos_errors.NotFound:
         return None
 
@@ -107,16 +109,17 @@ def main():
 
     changed = False
     result = None
-    
+
     try:
         if state == 'absent':
-            member_list = acos_client.slb.service_group.member.get_list(sg_name);
+            member_list = get_member_list(acos_client, sg_name)
+            if member_list:
+                for member in member_list['member-list']:
+                    result = acos_client.slb.service_group.member.delete(sg_name,
+                                                                         member['name'],
+                                                                         member['port'])
+                    changed = True
 
-            for member in member_list['member-list']:
-                result = acos_client.slb.service_group.member.delete(sg_name,
-                                                                     member['name'],
-                                                                     member['port'])
-                changed = True
             try:
                 result = acos_client.slb.service_group.delete(sg_name)
                 changed = True
@@ -128,8 +131,8 @@ def main():
             result = slb_sg
             if slb_sg:
                 service_group = dict(name=sg_name, protocol=protocol)
+                LOG.debug(service_group)
                 service_group["lb-method"] = lb_method
-
 
                 update = check_update_sg(acos_client, service_group, slb_sg)
                 if update:
@@ -164,16 +167,16 @@ def main():
 
     except Exception as e:
         module.fail_json(msg=("Caught exception: {0}").format(e))
-    LOG.debug(result)
+
     module.exit_json(changed=changed, content=result)
 
 
 import logging as LOG
 LOG.basicConfig(filename=".debug", level=LOG.DEBUG)
 
+from ansible.module_utils.a10 import a10_argument_spec
+from ansible.module_utils.urls import url_argument_spec
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.urls import url_argument_spec 
-from ansible.module_utils.a10 import axapi_call, a10_argument_spec, axapi_authenticate, axapi_failure, axapi_enabled_disabled
 
 import acos_client as acos
 from acos_client import errors as acos_errors

@@ -46,16 +46,15 @@ def check_update_member(acos_client, member, slb_member):
 
 def get_service_group(acos_client, sg_name):
     try:
-        LOG.debug(acos_client.slb.service_group.get(sg_name))
         return acos_client.slb.service_group.get(sg_name)
     except acos_errors.NotFound:
         return None
 
 def check_update_sg(acos_client, service_group, slb_sg):
-   for k,v in service_group.items():
-        if not slb_sg["service-group"][k] == v:
-            return True
-   return False
+        for k,v in service_group.items():
+            if not slb_sg["service-group"].get(k) == v:
+                return True
+        return False
 
 def main():
     argument_spec = a10_argument_spec()
@@ -66,18 +65,18 @@ def main():
             service_group=dict(type='str', required=True, aliases=['service_group', 'pool', 'group', 'name']),
             service_group_protocol=dict(type='str', default='tcp', aliases=['proto', 'protocol'],
                                         choices=['tcp', 'udp']),
-            service_group_method=dict(type='str', defaut='round-robin',
-                                      aliases=['lb_method'],
-                                      choices=['round-robin',
-                                               'weighted-rr',
-                                               'least-connection',
+            lb_method=dict(type='str', aliases=['lb_method'],
+                                       choices=['round-robin',
+                                                'weighted-rr',
+                                                'fastest-response',
+                                                'round-robin-strict',
+                                                'src-ip-only-hash',
+                                                'src-ip-hash']),
+            lc_method=dict(type='str', aliases=['lc_method'],
+                                       choices=['least-connection',
                                                'weighted-least-connection',
                                                'service-least-connection',
-                                               'service-weighted-least-connection',
-                                               'fastest-response',
-                                               'round-robin-strict',
-                                               'src-ip-only-hash',
-                                               'src-ip-hash']),
+                                               'service-weighted-least-connection']),
             members=dict(type='list', aliases=['member'], default=[]),
             partition=dict(type='str', default=[]),
         )
@@ -98,12 +97,25 @@ def main():
 
     sg_name = module.params["name"]
     lb_method = module.params["lb_method"]
+    lc_method = module.params["lc_method"]
     protocol = module.params["protocol"]
 
     members = standardize_members(members)
 
     if sg_name is None:
         module.fail_json(msg='service_group is required')
+
+    if lc_method and lb_method:
+        module.fail_json(msg='only one load balancing method allowed')
+
+    service_group = dict(name=sg_name, protocol=protocol)
+
+    if lb_method:
+        service_group['lb-method'] = lb_method
+
+    if lc_method:
+        service_group['lc-method'] = lc_method
+        lb_method = lc_method
 
     acos_client = acos.Client(host, "3.0", username, password)
 
@@ -119,21 +131,19 @@ def main():
                                                                          member['name'],
                                                                          member['port'])
                     changed = True
+                    LOG.debug("Deleted members")
 
             try:
                 result = acos_client.slb.service_group.delete(sg_name)
                 changed = True
+                LOG.debug("Deleted service group")
             except acos_errors.NotFound:
-                module.fail_json(msg="service group does not exist")
+                result="service group does not exist"
         
         elif state == 'present':
             slb_sg = get_service_group(acos_client, sg_name)
-            result = slb_sg
+            
             if slb_sg:
-                service_group = dict(name=sg_name, protocol=protocol)
-                LOG.debug(service_group)
-                service_group["lb-method"] = lb_method
-
                 update = check_update_sg(acos_client, service_group, slb_sg)
                 if update:
                     result = acos_client.slb.service_group.update(sg_name, protocol,

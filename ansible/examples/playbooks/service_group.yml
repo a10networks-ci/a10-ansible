@@ -9,8 +9,8 @@
         state: "present"
         name: sg-81-tcp
         protocol: "tcp"
-        lb_method: "least-connection"
+        lb_method: "round-robin"
         members:
           - name: foo1.mydomain.com
-            port: 8080
+            port: 8081
             state: enable
